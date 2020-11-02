@@ -8,44 +8,52 @@ class Scenario(
     private val usecase2: Usecase2,
 ) {
 
-    suspend operator fun invoke() {
+    suspend operator fun invoke() = try {
         coroutineScope {
             listOf(
                 async { usecase1() },
                 async { usecase2() },
             ).awaitAll()
         }
+    } catch (throwable: Throwable) {
+        println("invoke " + throwable.message)
     }
 }
 
 class Usecase1 {
     suspend operator fun invoke() {
-        println("start1")
-        delay(100)
-//        throw Exception("поймай")
-        println("end1")
+        withContext(Dispatchers.Default) {
+            println("start1 ${Thread.currentThread()}")
+            delay(100)
+            println("end1  ${Thread.currentThread()}")
+        }
     }
 }
 
 class Usecase2 {
     suspend operator fun invoke() {
-        println("start2")
-        delay(1000)
-        println("end2")
+        withContext(Dispatchers.Unconfined) {
+            println("start2 ${Thread.currentThread()}")
+            delay(1000)
+            throw Exception("поймай")
+            println("end2  ${Thread.currentThread()}")
+        }
     }
 }
 
 fun main() = runBlocking<Unit> {
     try {
-        launch {
-            val usecase = Scenario(Usecase1(), Usecase2())
-            val usecase2 = Scenario(Usecase1(), Usecase2())
-            launch { usecase.invoke() }
-            launch { usecase2.invoke() }
+        coroutineScope {
+            repeat(2) {
+                launch(Dispatchers.IO) {
+                    println(Thread.currentThread())
+                    Scenario(Usecase1(), Usecase2())()
+                }
+            }
+            delay(150)
+            cancel()
         }
-        delay(10)
-        cancel()
     } catch (throwable: Throwable) {
-        println(throwable.message)
+        println("main " + throwable.message)
     }
 }
